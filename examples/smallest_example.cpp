@@ -165,6 +165,22 @@ class MyMatrix : public VirtualGenerator<double> {
 
   
 };
+
+
+
+//produit entre deux matrices pleines
+
+
+Matrix<double> Mprod(Matrix<double> A, Matrix<double> B){
+    Matrix<double> res(A.nb_rows(),B.nb_cols());
+    for (int l = 0; l < B.nb_cols();++l){
+        vector<double> x = B.get_col(l); vector<double> y = A*x;
+        for(int k =0; k< A.nb_rows(); ++k){
+            res(k,l) = y[k];
+        }
+    }
+    return res;}
+
 // Produit marche mais j'ia quand même une petite erreur ...
 void Produit(Block<double>* B, const vector<double> x, vector<double>* y,int* n){
   int of_t = B->get_target_cluster().get_offset(); int of_s = B->get_source_cluster().get_offset();
@@ -216,7 +232,7 @@ void Produitt(Block<double>* B, const vector<double> x, vector<double>* y,int* n
     vector<double> py= *y;
     for (int k0=0; k0 < sz_s; ++ k0){
       double tempp =0;
-      // C'est la qu'il fau changer
+      // C'est la qu'il faut changer
       for (int k1 =0; k1 <sz_t; ++k1){
 	vector<double> yy(sz_t,0);
 	vector<double> xtk(sz_s,0);xtk[k0]=xt[k1]; 
@@ -275,7 +291,7 @@ pair<vector<Matrix<double>>,vector<int>> restrict_lr(pair<vector<Matrix<double>>
     SR.first = sr ; SR.second = of;
 
   return SR;}
-
+/*
 //fonction restrict
 pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> Restrict(pair < vector<Matrix<double>>,vector<int>>SR0, vector<Block<double>*>SH0,const VirtualCluster& t, const VirtualCluster& s){
   int of_t = t.get_offset(); int sz_t = t.get_size(); int of_s = s.get_offset(); int sz_s = s.get_size();
@@ -357,45 +373,262 @@ pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> Restric
 	}
 	  else{
 	    vh.push_back(H);vh.push_back(K);}}
-	  
-	  SR0.first = Suv; SR0.second = off; Res.first =SR0; Res.second  = vh;
-    
-  
- return Res;}
 
-/*
-void Prod(HMatrix<double> L,Block<double>* Lr,pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> S,const VirtualCluster& t,const  VirtualCluster& s){
+	  SR0.first = Suv; SR0.second = off; Res.first =SR0; Res.second  = vh;
+
+
+ return Res;}
+*/
+
+
+//fonction restrict
+pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> Restrict(pair<pair < vector<Matrix<double>>,vector<int>>, vector<Block<double>*>>S,const VirtualCluster& t, const VirtualCluster& s){
+    int of_t = t.get_offset(); int sz_t = t.get_size(); int of_s = s.get_offset(); int sz_s = s.get_size();
+    pair<vector<Matrix<double>>,vector<int>> Sr = S.first;
+    vector<Block<double>*> SH0 = S.second;
+    pair<vector<Matrix<double>>,vector<int>> SR0 = restrict_lr(Sr,t,s);
+    pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> Res;
+    Res.first = SR0;Res.second= SH0;
+    vector<Matrix<double>> Suv = SR0.first; vector<int> off = SR0.second;
+    int n = (SH0.size())/2;
+    int oft = t.get_offset(); int ofs = s.get_offset();
+    int szt = t.get_size(); int szs = s.get_size();
+    // On parcours les HK de SH
+    vector<Block<double>*> vh;
+    vector<Block<double>*> vk;
+    vector<Block<double>*> vtemp;
+    cout<<"n"<<n;
+    for (int k =0; k< n; ++k){
+        Block<double>*H = SH0[2*k]; Block<double>* K = SH0[2*k+1];
+        //On prend rho=r = H.source= K.target();
+        int of_r = K->get_target_cluster().get_offset(); int sz_r = K->get_target_cluster().get_size();
+        int nb_r = K->get_target_cluster().get_nb_sons();
+        int of_h = H->get_target_cluster().get_offset(); int sz_h =H->get_target_cluster().get_size();
+        int of_k = K->get_source_cluster().get_offset(); int sz_k = K->get_source_cluster().get_size();
+        //déja faut extraire les paires concerné
+        if (((oft>= of_h) and ( szt<= sz_h)) and ( (ofs>=of_k) and (szs<=sz_k))){
+
+            // on regarde les concernés
+            for (int i = 0; i< H->nb_sons();++i){
+                Block<double>& Hk = H->get_son(i);
+                for(int j=0; j< K->nb_sons(); ++j){
+                    Block<double>& Kk = K->get_son(j);
+                    if ( ((oft>=Hk.get_target_cluster().get_offset() ) and (szt<= Hk.get_target_cluster().get_size())) and ((ofs>=Kk.get_source_cluster().get_offset() ) and (szs<= Kk.get_source_cluster().get_size()))){
+                        if ((Kk.get_target_cluster().get_offset()==Hk.get_source_cluster().get_offset() ) and (Kk.get_target_cluster().get_size()== Hk.get_source_cluster().get_size())){
+                            vtemp.push_back(&Hk); vtemp.push_back(&Kk);} }	} }
+        }
+    }
+    //normalement vtemp c'est notre nouveaux Sh mais il a peut être des low rank
+    int nn = vtemp.size()/2;
+    for (int l = 0; l< nn ; ++l){
+        Block<double>* H = vtemp[2*l]; Block<double>* K= vtemp[2*l+1];
+        // on regarde si les deux sont low rank
+        if(!(H->get_low_rank_block_data() ==nullptr) and !(K->get_low_rank_block_data() == nullptr)){
+            Matrix<double> Uh,Vh,Uk,Vk;
+            Uh = H->get_low_rank_block_data()->Get_U();Vh = H->get_low_rank_block_data()->Get_V();
+            Uk = K->get_low_rank_block_data()->Get_U();Uk = K->get_low_rank_block_data()->Get_V();
+            Matrix<double> U = Uh; Matrix<double> V = Vh*(Uk*Vk);
+            int rt = H->get_target_cluster().get_offset(); int rs = K->get_source_cluster().get_offset();
+            Suv.push_back(U); Suv.push_back(V); off.push_back(rt); off.push_back(rs);
+        }
+        //Celle de droite low rank
+        else if( !(K->get_low_rank_block_data() == nullptr)){
+            Matrix<double> U = K->get_low_rank_block_data()->Get_U();
+            Matrix<double> V = K->get_low_rank_block_data()->Get_V();
+            Matrix<double> W( H->get_target_cluster().get_size(),U.nb_cols());
+            for (int rr = 0 ; rr <U.nb_cols();++rr){
+                vector<double> x = U.get_col(rr);
+                int rp = H->get_target_cluster().get_size();
+                vector<double> y (rr,0.);
+                vector<double>* py = &y;
+                Produit(H,x,py,0);
+                vector<double> xux = *py;
+                for(int kl = 0 ; kl< xux.size(); ++kl){
+                    W(kl,rr)=xux[kl];}}
+            Suv.push_back(W);Suv.push_back(V); off.push_back(H->get_target_cluster().get_offset()); off.push_back(K->get_source_cluster().get_offset());}
+        //celle de guauche low rank
+        else if( !(H->get_low_rank_block_data()==nullptr)){
+            Matrix<double> U = H->get_low_rank_block_data()->Get_U();
+            Matrix<double> V = H->get_low_rank_block_data()->Get_V();
+            Matrix<double> W( U.nb_cols(),K->get_source_cluster().get_size());
+            for (int rr = 0 ; rr <V.nb_rows();++rr){
+                vector<double> x = V.get_row(rr);
+                vector<double> y (K->get_target_cluster().get_size(),0.);
+                vector<double>* py = &y;
+                Produitt(K,x,py,0);
+                vector<double> xux = *py;
+                for(int kl = 0 ; kl< xux.size(); ++kl){
+                    W(kl,rr)=xux[kl];}
+            }
+            Suv.push_back(U);Suv.push_back(W); off.push_back(H->get_target_cluster().get_offset()); off.push_back(K->get_source_cluster().get_offset());
+        }
+        else{
+            //ni H ni K ne sont low rank on les laisse dans vh
+            vh.push_back(H);vh.push_back(K);}}
+
+    pair<vector<Matrix<double>>,vector<int>> sr; sr.first = Suv; sr.second = off;
+    Res.first = sr; Res.second = vh;
+
+    return Res;}
+
+
+
+//VRAI fonction restrict ---------------------------> Ca a l'aire de marcher
+pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> Restrict0(pair<pair < vector<Matrix<double>>,vector<int>>, vector<Block<double>*>>S,const VirtualCluster& t, const VirtualCluster& s){
+    int of_t = t.get_offset(); int sz_t = t.get_size(); int of_s = s.get_offset(); int sz_s = s.get_size();
+    pair<vector<Matrix<double>>,vector<int>> Sr = S.first;
+    vector<Block<double>*> SH0 = S.second;
+    //on fait direct la restriction a de Sr
+    pair<vector<Matrix<double>>,vector<int>> SR0 = restrict_lr(Sr,t,s);
+    pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> Res;
+    Res.first = SR0;Res.second= SH0;
+    vector<Matrix<double>> Suv = SR0.first; vector<int> off = SR0.second;
+    int n = (SH0.size())/2;
+    int oft = t.get_offset(); int ofs = s.get_offset();
+    int szt = t.get_size(); int szs = s.get_size();
+    // On parcours les HK de SH
+    vector<Block<double>*> vh;
+    vector<Block<double>*> vk;
+    vector<Block<double>*> vtemp;
+    for (int k =0; k< n; ++k){
+        Block<double>*H = SH0[2*k]; Block<double>* K = SH0[2*k+1];
+        //On prend rho=r = H.source= K.target();
+        int of_r = K->get_target_cluster().get_offset(); int sz_r = K->get_target_cluster().get_size();
+        int nb_r = K->get_target_cluster().get_nb_sons();
+        int of_h = H->get_target_cluster().get_offset(); int sz_h =H->get_target_cluster().get_size();
+        int of_k = K->get_source_cluster().get_offset(); int sz_k = K->get_source_cluster().get_size();
+        //On regarde si ils sont pas déja a la bonne taille
+
+        if (((oft== of_h) and ( szt== sz_h)) and ( (ofs==of_k) and (szs==sz_k)))
+        {
+            vtemp.push_back(H); vtemp.push_back(K);}
+        else{
+            // on regarde les concernés
+            cout<< H->nb_sons()<<","<<K->nb_sons()<<endl;
+            for (int i = 0; i< H->nb_sons();++i){
+                Block<double>& Hk = H->get_son(i);
+                    for(int j=0; j< K->nb_sons(); ++j){
+                        Block<double>& Kk = K->get_son(j);
+                        if ( ((oft>=Hk.get_target_cluster().get_offset() ) and (szt<= Hk.get_target_cluster().get_size())) and ((ofs>=Kk.get_source_cluster().get_offset() ) and (szs<= Kk.get_source_cluster().get_size()))){
+                            if((Hk.get_source_cluster().get_offset()==Kk.get_target_cluster().get_offset()) and (Hk.get_source_cluster().get_size()==Kk.get_target_cluster().get_size())){
+                            vtemp.push_back(&Hk); vtemp.push_back(&Kk); }	} }
+
+    }} }
+    //normalement vtemp c'est notre nouveaux Sh mais il a peut être des low rank
+    int nn = vtemp.size()/2;
+    for (int l = 0; l< nn ; ++l){
+        Block<double>* H = vtemp[2*l]; Block<double>* K= vtemp[2*l+1];
+        // on regarde si les deux sont low rank
+        if(!(H->get_low_rank_block_data() ==nullptr) and !(K->get_low_rank_block_data() == nullptr)){
+            Matrix<double> Uh,Vh,Uk,Vk;
+            Uh = H->get_low_rank_block_data()->Get_U();Vh = H->get_low_rank_block_data()->Get_V();
+            Uk = K->get_low_rank_block_data()->Get_U();Uk = K->get_low_rank_block_data()->Get_V();
+            Matrix<double> U = Uh; Matrix<double> V = Vh*(Uk*Vk);
+            int rt = H->get_target_cluster().get_offset(); int rs = K->get_source_cluster().get_offset();
+            Suv.push_back(U); Suv.push_back(V); off.push_back(rt); off.push_back(rs);
+        }
+        //Celle de droite low rank
+        else if( !(K->get_low_rank_block_data() == nullptr)){
+            Matrix<double> U = K->get_low_rank_block_data()->Get_U();
+            Matrix<double> V = K->get_low_rank_block_data()->Get_V();
+            Matrix<double> W( H->get_target_cluster().get_size(),U.nb_cols());
+            for (int rr = 0 ; rr <U.nb_cols();++rr){
+                vector<double> x = U.get_col(rr);
+                int rp = H->get_target_cluster().get_size();
+                vector<double> y (rr,0.);
+                vector<double>* py = &y;
+                Produit(H,x,py,0);
+                vector<double> xux = *py;
+                for(int kl = 0 ; kl< xux.size(); ++kl){
+                    W(kl,rr)=xux[kl];}}
+            Suv.push_back(W);Suv.push_back(V); off.push_back(H->get_target_cluster().get_offset()); off.push_back(K->get_source_cluster().get_offset());}
+        //celle de guauche low rank
+        else if( !(H->get_low_rank_block_data()==nullptr)){
+            Matrix<double> U = H->get_low_rank_block_data()->Get_U();
+            Matrix<double> V = H->get_low_rank_block_data()->Get_V();
+            Matrix<double> W( U.nb_cols(),K->get_source_cluster().get_size());
+            for (int rr = 0 ; rr <V.nb_rows();++rr){
+                vector<double> x = V.get_row(rr);
+                vector<double> y (K->get_target_cluster().get_size(),0.);
+                vector<double>* py = &y;
+                Produitt(K,x,py,0);
+                vector<double> xux = *py;
+                for(int kl = 0 ; kl< xux.size(); ++kl){
+                    W(kl,rr)=xux[kl];}
+            }
+            Suv.push_back(U);Suv.push_back(W); off.push_back(H->get_target_cluster().get_offset()); off.push_back(K->get_source_cluster().get_offset());
+        }
+        else{
+            //ni H ni K ne sont low rank on les laisse dans vh
+            vh.push_back(H);vh.push_back(K);}}
+
+    pair<vector<Matrix<double>>,vector<int>> sr; sr.first = Suv; sr.second = off;
+    Res.first = sr; Res.second = vh;
+
+    return Res;}
+
+//fonction de merde pour envoyer le coeff d'un virtual block
+double coef(int i , int j ,int n , int m, const VirtualBlockData<double>* val){
+    vector<double> x(m,0); vector<double> y (n,0);x[i]=1;
+    val->add_mvprod_row_major(x.data(),y.data(),1,'N','N');
+    return y[j];
+}
+
+//Fonction de merde pour avoir une collonne ( on va assembler nos matrices en faisant des produits matices vecteurs
+vector<double> Col(int i  ,int n , int m, const VirtualBlockData<double>* val){
+    vector<double> y;
+    for (int j =0 ; j<n ; ++j){
+        y.push_back(coef(i,j,n,m,val));
+    }
+    return y;
+}
+
+//fonction de merde pour avoir la matrice
+Matrix<double> get_mat(int n , int m , const VirtualBlockData<double>* A,const VirtualBlockData<double>* B){
+    Matrix<double> Res (n,m);
+    for(int l =0; l<m ; ++l){
+        vector<double> y = Col(l,n,m,B);
+        for(int k =0; k< n; ++n){
+            Res(k,l) = y[k];}
+    }
+    return Res;}
+// Fonction multiplication
+// en gros on regarde garde le bloc Lk et on le stocke en void dans L si on le calcule
+// Ca marche pas en initialisant avec une H mat donc peut être si on regarde jute sa computed block
+void Prod(HMatrix<double>* L,Block<double>* Lr,pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> S,const VirtualCluster& t,const  VirtualCluster& s){
   if (!(Lr->nb_sons() ==0)){
     for (int k =0; k< Lr->nb_sons(); ++k){
       Block<double>& Lk = Lr->get_son(k);
-      pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> S0 = Restrict(S.first, S.second,Lk.get_target_cluster(),Lk.get_source_cluster());
-      Prod(L,Lk,S0,Lk.get_target_cluster(),Lk.get_source_cluster());
+      pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> S0 = Restrict0(S,Lk.get_target_cluster(),Lk.get_source_cluster());
+      Prod(L,&Lk,S0,Lk.get_target_cluster(),Lk.get_source_cluster());
     }
   }
   else{
-    pair<vector<Matrix<double>,vector<int>>SR = S.first; vector<Block<double>*> Sh= S.second;
-    vector<Matrix<double>> Sr = SR.firts; vector<int> off = SR.second;
+    pair<vector<Matrix<double>>,vector<int>>SR = S.first; vector<Block<double>*> Sh= S.second;
+    vector<Matrix<double>> Sr = SR.first; vector<int> off = SR.second;
+    //Cas ou on calcule parce que c'est full (normalement du coup il y a rien dans Sr
     if (!(Lr->IsAdmissible()) ) {
-      for(int k =0; k < sh.size()/2; ++k){
-	H = sh[2*k]; K = sh[2*k+1];
+      for(int k =0; k < Sh.size()/2; ++k){
+	Block<double>* H = Sh[2*k]; Block<double>* K = Sh[2*k+1];
 	if ( !(H->get_block_data()==nullptr) and !( K->get_block_data()==nullptr) ) {
-	  // H*K ?
+	  // H*K ? -> est_ce que je dois juste définir une nouvelle mvprod??
 	}
       }
     }
+    //sinon tout est dans sr
      else{
         
       vector<vector<double>> uu,vv;
       for (int i =0 ; i< Sr.size()/2 ; ++i){
 	vector<double> uuu;
-	Matrix<double> U = Sr[2*k]; Matrix<double> V = Sr[2*k+1];
+	Matrix<double> U = Sr[2*i]; Matrix<double> V = Sr[2*i+1];
 	for(int l = 0; l< U.nb_cols(); ++l){
-	  vector<double> uk  = U.get_col(k); uu.push_back(uk);}
+	  vector<double> uk  = U.get_col(l); uu.push_back(uk);}
 	for (int l =0; l< V.nb_rows(); ++l){
 	  vector<double> vk = V.get_row(l); vv.push_back(vk);}
       }
       // on fabrique U et V;
-      Matrix<double> U (uu[0].size();uu.size())
+      Matrix<double> U (uu[0].size(),uu.size());
       for (int k =0;k< uu[0].size();++k){
 	for(int l =0; l<uu.size(); ++l){
 	  U(k,l) = uu[l][k];} }
@@ -406,9 +639,67 @@ void Prod(HMatrix<double> L,Block<double>* Lr,pair<pair < vector<Matrix<double>>
       Lr->get_low_rank_block_data()->Get_U() = U;
       Lr->get_low_rank_block_data()->Get_V() = V;}}
 }
-	*/
+
 	
-	
+void testProd(Block<double>* L,Block<double>* Lr,pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> S,const VirtualCluster& t,const  VirtualCluster& s) {
+    if (!(Lr->nb_sons() == 0)) {
+        for (int k = 0; k < Lr->nb_sons(); ++k) {
+            Block<double> &Lk                                                           = Lr->get_son(k);
+            pair<pair<vector<Matrix<double>>, vector<int>>, vector<Block<double> *>> S0 = Restrict0(S, Lk.get_target_cluster(), Lk.get_source_cluster());
+            testProd(L, &Lk, S0, Lk.get_target_cluster(), Lk.get_source_cluster());
+        }
+    } else {
+        pair<vector<Matrix<double>>, vector<int>> SR = S.first;
+        vector<Block<double> *> Sh                   = S.second;
+        vector<Matrix<double>> Sr                    = SR.first;
+        vector<int> off                              = SR.second;
+        // Cas ou on calcule parce que c'est full (normalement du coup il y a rien dans Sr
+        if (!(Lr->IsAdmissible())) {
+            for (int k = 0; k < Sh.size() / 2; ++k) {
+                Block<double> *H = Sh[2 * k];
+                Block<double> *K = Sh[2 * k + 1];
+                if (!(H->get_block_data() == nullptr) and !(K->get_block_data() == nullptr)) {
+                    // H*K ? -> est_ce que je dois juste définir une nouvelle mvprod??
+                    //est ce que je vais devoir faire des
+
+                }
+            }
+        }
+        // sinon tout est dans sr
+        else {
+
+            vector<vector<double>> uu, vv;
+            for (int i = 0; i < Sr.size() / 2; ++i) {
+                vector<double> uuu;
+                Matrix<double> U = Sr[2 * i];
+                Matrix<double> V = Sr[2 * i + 1];
+                for (int l = 0; l < U.nb_cols(); ++l) {
+                    vector<double> uk = U.get_col(l);
+                    uu.push_back(uk);
+                }
+                for (int l = 0; l < V.nb_rows(); ++l) {
+                    vector<double> vk = V.get_row(l);
+                    vv.push_back(vk);
+                }
+            }
+            // on fabrique U et V;
+            Matrix<double> U(uu[0].size(), uu.size());
+            for (int k = 0; k < uu[0].size(); ++k) {
+                for (int l = 0; l < uu.size(); ++l) {
+                    U(k, l) = uu[l][k];
+                }
+            }
+            Matrix<double> V(vv.size(), vv[0].size());
+            for (int k = 0; k < vv.size(); ++k) {
+                for (int l = 0; l < vv[0].size(); ++l) {
+                    V(k, l) = vv[k][l];
+                }
+            }
+            Lr->get_low_rank_block_data()->Get_U() = U;
+            Lr->get_low_rank_block_data()->Get_V() = V;
+        }
+    }
+}
 
 //fonction restrict2
 // pair<pair < vector<Matrix<double>> ,vector<int>>,vector<Block<double>*>> Restrict2(pair < vector<Matrix<double>>,vector<int>>  SR0, vector<Block<double>*>SH0,const VirtualCluster& t, const VirtualCluster& s){
@@ -449,6 +740,7 @@ void Prod(HMatrix<double> L,Block<double>* Lr,pair<pair < vector<Matrix<double>>
 //   // 	    cout<< Sr.first.size()<<endl;
 //   // 	    Sr.first.push_back(u);Sr.first.push_back(v);Sr.second.push_back(of_t);Sr.second.push_back(of_s);
 //   // 	    cout<< Sr.first.size()<<endl;
+
 //   // 	   	}
 //   // 	  else if( !(K->get_low_rank_block_data()==nullptr)){
 //   // 	    Matrix<double> Uk = K->get_low_rank_block_data()->Get_U();Matrix<double> Vk = K->get_low_rank_block_data()->Get_V();
@@ -582,32 +874,131 @@ int main(int argc, char *argv[]) {
      //cout<< nr<< ','<< sqrt(nr)/4761<<endl;
      cout<<norm2(ref-teest)/norm2(ref)<< endl;
      cout<< rr<< endl;
-     //cout<<teest[10]<<endl;
-     // vector<double> y2(4761,0);
-     // int r2 = 0; 
-     // Prod(Rt,xx,y2,&r2);
-     // cout<<Rt->get_target_cluster().get_size()<< endl;
-     // cout<< norm2(y2-ref)/norm2(ref)<<endl;
-     // for(int ss =0; ss<Data.size(); ++ss){
-     //   Block<double>* bb= Data[ss];
-     // int oft =bb->get_target_cluster().get_offset(); int ofs  = bb->get_source_cluster().get_offset();
-     // int szt = bb->get_target_cluster().get_size(); int szs = bb->get_source_cluster().get_size();
-     // Matrix<double> m (szt,szs);
-     // //cout<<"...................."<< endl;
-     // for ( int k = 0; k < szt;++k){
-     //   for (int l =0; l<szs;++l){
-     // 	 m(k,l)=A.get_coef(k+oft,l+ofs);}}
-     // vector<double> x1(szs,1); vector<double> x2 (szs,1);
-     // vector<double> y1(szt,0); vector<double> y2(szt,0);
-     // bb->get_block_data()->add_mvprod_row_major(x1.data(),y1.data(),1,'N','N');
-     // if( norm2(m*x1-y1)/norm2(m*x1)> 0.1){
-     //   cout<< norm2(m*x1-y1)/norm2(m*x1)<< endl;
-     //   cout<< szt<<','<<szs<<endl;
-     //   cout<<oft<<','<<ofs<<endl;
-     //   cout<< bb->IsAdmissible()<<endl;
-     //   cout<<";;;;;;;;;;;;"<<endl;}
-     // }
-     
+/*
+     //Test pour restrict
+     cout<< "Test Restrict"<< endl;
+     pair<vector<Matrix<double>>,vector<int>> sr; vector<Block<double>*> sh;
+     sh.push_back(Rt); sh.push_back(Rt);
+     pair<pair<vector<Matrix<double>>,vector<int>>,vector<Block<double>*>> S;
+     S.first = sr; S.second=sh;
+     pair<pair<vector<Matrix<double>>,vector<int>>,vector<Block<double>*>> Stest =  Restrict0(S,Rt->get_target_cluster(),Rt->get_source_cluster());
+     pair<vector<Matrix<double>>,vector<int>> srtest = Stest.first; vector<Block<double>*> ssh = Stest.second;
+     cout<< (srtest.first).size()<<','<<(srtest.second).size()<<","<<endl;
+     cout<< ssh.size()<<','<< ssh[0]->get_target_cluster().get_offset()<<','<<sh[0]->get_target_cluster().get_size()<<endl;
+     cout<<".............."<<endl;
+
+     pair<pair<vector<Matrix<double>>,vector<int>>,vector<Block<double>*>> Stest1 =  Restrict0(S,Rt->get_target_cluster().get_son(0),Rt->get_source_cluster().get_son(0));
+     pair<vector<Matrix<double>>,vector<int>> srtest1 = Stest1.first; vector<Block<double>*> ssh1 = Stest1.second;
+     cout<< (srtest1.first).size()<<','<<(srtest1.second).size()<<","<< endl;
+     cout<< ssh1.size()<<','<< ssh1[0]->get_target_cluster().get_offset()<<','<<ssh1[0]->get_target_cluster().get_size()<<endl;
+     cout<<".............."<<endl;
+
+     pair<pair<vector<Matrix<double>>,vector<int>>,vector<Block<double>*>> Stest2 =  Restrict0(S,Rt->get_son(0).get_son(0).get_target_cluster(),Rt->get_son(0).get_son(2).get_source_cluster());
+     pair<vector<Matrix<double>>,vector<int>> srtest2 = Stest2.first; vector<Block<double>*> ssh2 = Stest2.second;
+     cout<< (srtest2.first).size()<<','<<(srtest2.second).size()<<endl;
+     cout<< ssh2.size()<<','<< ssh2[0]->get_target_cluster().get_offset()<<','<<ssh2[0]->get_target_cluster().get_size()<<endl;
+     cout<<Rt->get_son(0).get_son(2).get_source_cluster().get_size()<< endl;
+     cout<<Rt->get_son(0).get_son(2).get_source_cluster().get_offset()<< endl;
+     cout<<".............."<<endl;
+
+*/
+     cout<< "Test Restrict0"<< endl;
+     pair<vector<Matrix<double>>,vector<int>> sr; vector<Block<double>*> sh;
+     Block<double>& B= Rt->get_son(0);Block<double>* BB = &B;
+     sh.push_back(BB); sh.push_back(BB);
+     pair<pair<vector<Matrix<double>>,vector<int>>,vector<Block<double>*>> S;
+     S.first = sr; S.second=sh;
+     pair<pair<vector<Matrix<double>>,vector<int>>,vector<Block<double>*>> Stest =  Restrict0(S,BB->get_target_cluster().get_son(0),BB->get_source_cluster().get_son(1));
+     pair<vector<Matrix<double>>,vector<int>> srtest = Stest.first; vector<Block<double>*> ssh = Stest.second;
+     cout<< (srtest.first).size()<<','<<(srtest.second).size()<<endl;
+     cout<< ssh.size()<<endl;
+     cout<< ssh[0]->get_target_cluster().get_offset()<<','<<ssh[0]->get_target_cluster().get_size()<<endl;
+     for ( int k =0; k< 2; ++k){
+         cout<<"++++++++++++++++"<<endl;
+         cout<< ssh[2*k]->get_target_cluster().get_offset()<<','<<ssh[2*k]->get_target_cluster().get_size()<<endl;
+         cout<< ssh[2*k]->get_source_cluster().get_offset()<<','<<ssh[2*k]->get_source_cluster().get_size()<<endl;
+         cout<<"------------------"<< endl;
+             cout<< ssh[2*k+1]->get_target_cluster().get_offset()<<','<<ssh[2*k+1]->get_target_cluster().get_size()<<endl;
+         cout<< ssh[2*k+1]->get_source_cluster().get_offset()<<','<<ssh[2*k+1]->get_source_cluster().get_size()<<endl;
+
+
+     }
+     cout<<".............."<<endl;
+    // test avec les valeurs des blocs
+    Matrix<double> M0(Rt->get_target_cluster().get_size(),Rt->get_source_cluster().get_size());
+    for(int k =0; k < Rt->get_target_cluster().get_size(); ++k){
+        for (int l = 0; l< Rt->get_source_cluster().get_size(); ++l){
+            M0(k,l)=A.get_coef(k,l);
+        }
+    }
+     cout<<"test blocs"<< endl;
+     vector<int> rep;
+     for (int k =0; k< Data.size(); ++k){
+         Block<double>* bb = Data[k];
+         if((bb->get_target_cluster().get_offset()==bb->get_source_cluster().get_offset())and (bb->get_target_cluster().get_size()==bb->get_source_cluster().get_size())){
+             rep.push_back(k);
+         }
+     }
+     int cpt = 0; int cps = 0;
+       //on en predn un qui peut etre mis au carré juste pour testé
+     for (int i = 0; i < rep.size() ; ++i) {
+         int kk            = rep[i];
+         Block<double> *bb = Data[kk];
+
+         int i1                                = bb->get_target_cluster().get_size();
+         int i2                                = bb->get_source_cluster().get_size();
+         int o1                                = bb->get_target_cluster().get_offset();
+         int o2                                = bb->get_source_cluster().get_offset();
+         const VirtualBlockData<double> *vtest = bb->get_block_data();
+         // double test = coef(0,0,i1,i2,bb0->get_block_data());
+         cout << coef(1, 1, i1, i2, vtest) << "           et          " << M0(o1+1, o2+1) << endl;
+         cout<< o1<<','<<o2<<endl;
+         Matrix<double> mm(i1, i2);
+
+         for (int k = 0; k < i1; ++k) {
+             //cout<<"-----------------"<<endl;
+             for (int l = 0; l < i2; ++l) {
+                 mm(k, l) = M0(k+o1,l+o2);
+                 //if (coef(k,l, i1, i2, vtest)  == A.get_coef(o1+k, o2+l) ){ cpt+=1;}
+                 //else{cps+=1;}
+
+             }
+         }
+         //vector<double> yy = Col(0,i1,i2,vtest);cout<<yy[0]<<','<<yy[1]<<endl;
+         vector<double> yres(Rt->get_target_cluster().get_size(),0);
+         vector<double> x0(Rt->get_source_cluster().get_size(),1);
+         vector<double> yyres(bb->get_target_cluster().get_size(),0);
+         vector<double> xtest(i2,1);
+         yyres = mm*x;
+
+         vector<double>* Y = &yres;
+         int rr0 = 0;
+         Produit(bb,x0,Y,&rr);
+         vector<double> test0= *Y;
+         vector<double> ytemp;
+         for(int k0=0 ; k0< i2; ++k0){
+             ytemp.push_back(test0[bb->get_source_cluster().get_offset()+k0]);
+         }
+         cout<< "++++++++"<< endl;
+         //cout<<norm2(yy-mm.get_col(0))<<endl;
+         cout<<norm2(ytemp-yyres)/norm2(yyres)<< endl;
+
+         //cout<<cpt<<','<<cps<< endl;
+         //Matrix<double> test = get_mat(i1, i2, vtest, vtest);
+         //Matrix<double> ref  = Mprod(mm,mm);
+         //cout << normFrob(test-ref)<<"!!!!"<< normFrob(test-ref)/ normFrob(ref)<<endl;
+     }
+     //cout<<cpt<<','<<cps<< ','<<cpt+cps<<endl;
+    // cout<< Rt->get_source_cluster().get_son(0).get_size()<<","<< Rt->get_source_cluster().get_son(0).get_offset()<< endl;
+    //cout<< Rt->get_target_cluster().get_size()*Rt->get_source_cluster().get_size()<<endl;
+     //cout<<Rt->nb_sons()<<endl;
+     //cout<< Rt->get_son(0).nb_sons()<< endl;
+
+
+
+
+
+
 
 
     MPI_Finalize();
