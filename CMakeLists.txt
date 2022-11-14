@@ -28,7 +28,7 @@ endif()
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # To set default CMAKE_BUILD_TYPE
-    set(default_build_type "Release")
+    set(default_build_type "Debug")
     if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
         message(STATUS "Setting build type to '${default_build_type}' as none was specified.")
         set(CMAKE_BUILD_TYPE
@@ -40,6 +40,9 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
         message(STATUS "Setting build type to 'Release_native'.")
         set(CMAKE_BUILD_TYPE Release)
         set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -march=native")
+elseif(${CMAKE_BUILD_TYPE} STREQUAL Debug)
+        set(CMAKE_BUILD_TYPE Debug)
+	add_compile_options(-g3)
     endif()
 
     message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")

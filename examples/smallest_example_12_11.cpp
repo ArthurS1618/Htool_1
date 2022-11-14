@@ -68,12 +68,13 @@ class MyMatrix2 : public VirtualGenerator<double> {
    // liste de matrice de rang faible U1,V1,U2,V2..., liste de leurs offset, liste de hmat H1,K1,H2,K2
     vector<Matrix<double>> SR;
     vector<int> off;
-    vector<Block<double>*> SH;
+    vector<Block<double>> SH;
 
   public:
+  
     //Constructeur qui prend deux hmat : L=HK = sumexpr(I,I)
-    SumExpression( Block<double>* H, Block<double>* K){ vector<Block<double>*> vb; vb.push_back(H); vb.push_back(K); SH = vb;}
-   
+    SumExpression( Block<double>& H,  Block<double>& K){ vector<Block<double>> vb; vb.push_back(H); vb.push_back(K);}
+  /*
 // Constructeur avec tout
     SumExpression(const vector<Matrix<double>>& SR0,const vector<int>& off0,const vector<Block<double>*>& Sh0){this->SR=SR0;this->off=off0;this->SH=Sh0;}
 
@@ -98,7 +99,6 @@ class MyMatrix2 : public VirtualGenerator<double> {
 		if( (H->get_low_rank_block_data() != nullptr) and (K->get_low_rank_block_data() != nullptr) ) {
 			Matrix<double> Uh = H->get_low_rank_block_data()->Get_U(); Matrix<double> Vh = H->get_low_rank_block_data()->Get_V();
 			Matrix<double> Uk = K->get_low_rank_block_data()->Get_U(); Matrix<double> Vk = K->get_low_rank_block_data()->Get_V();
-
 			Matrix<double> U = Uh* ( Vh * Uk); sr.push_back(U); sr.push_back(Vk);
 		    of.push_back(oft); of.push_back(ofs); }
 		
@@ -128,45 +128,6 @@ class MyMatrix2 : public VirtualGenerator<double> {
 		}
 		SR = sr;SH = shres; off = of; }
 		
-		/*
-	void Triplus(Block<double>* H, Block<double>* K){
-		int oft = H->get_target_cluster().get_offset(); int ofs = K->get_source_cluster().get_offset();
-		
-		//On différencie lr*lr, lr*hmat, hmat*lr
-		//lrmat lrmat
-		if( (H->get_low_rank_block_data() != nullptr) and (K->get_low_rank_block_data() != nullptr) ) {
-			Matrix<double> Uh = H->get_low_rank_block_data()->Get_U(); Matrix<double> Vh = H->get_low_rank_block_data()->Get_V();
-			Matrix<double> Uk = K->get_low_rank_block_data()->Get_U(); Matrix<double> Vk = K->get_low_rank_block_data()->Get_V();
-			Matrix<double> U = Uh* ( Vh * Uk); sr.push_back(U); sr.push_back(Vk);
-		    of.push_back(oft); of.push_back(ofs); }
-		
-		// hmat lrmat -> plein de hmat vecteus
-		if ( ( H->get_low_rank_block_data()== nullptr) and (K->get_low_rank_block_data() != nullptr) ) {
-			Matrix<double> U = K->get_low_rank_block_data()->Get_U(); Matrix<double> V = K->get_low_rank_block_data()->Get_V();
-                        Matrix<double> W( H->get_target_cluster().get_size(),U.nb_cols());
-                        for (int j = 0 ; j <U.nb_cols();++j){
-                        	const vector<double> x = U.get_col(j); vector<double> y (H->get_target_cluster().get_size(),0.); 
-				produitP(*H,x,y,'N');
-                        	for(int kl = 0 ; kl< y.size(); ++kl){ W(kl,j)=y[kl];}}
-                        sr.push_back(W);sr.push_back(V); of.push_back(oft); of.push_back(ofs);}
-		
-		// lrmat hmat -> (hmat*vect)^T
-		if ( (H->get_low_rank_block_data() != nullptr) and ( K->get_low_rank_block_data() == nullptr) ){
-			Matrix<double> U = H->get_low_rank_block_data()->Get_U(); Matrix<double> V = H->get_low_rank_block_data()->Get_V();
-			Matrix<double> W( U.nb_cols(),K->get_source_cluster().get_size());
-                        for (int rr = 0 ; rr <V.nb_rows();++rr){
-                        	const vector<double> x = V.get_row(rr); vector<double> y (K->get_target_cluster().get_size(),0.);
-                        	produitP(*K,x,y,'T');
-                        	for(int kl = 0 ; kl< y.size(); ++kl){ W(rr,kl)=y[kl];} }
-                    	sr.push_back(U);sr.push_back(W); of.push_back(oft); of.push_back(ofs); }
-		
-		// les deux sont hmat on les laisse dans sh
-		if ( (H->get_low_rank_block_data()== nullptr) and (K->get_low_rank_block_data() == nullptr) ){
-			shres.push_back(H); shres.push_back(K); } 
-		}
-		SR = sr;SH = shres; off = of; }
-			
-	*/
 
     //Fonction Restrict
     SumExpression Restrict(const VirtualCluster& t, const VirtualCluster& s){
@@ -238,7 +199,6 @@ class MyMatrix2 : public VirtualGenerator<double> {
 		return Res; }
 		
 	// Fonction troncature
-	// C'est un peu dommage, vu l'implémentatin de htool on est obligé de faire la dernière étape 2 fois ( voire hmult)
 	
 	LowRankMatrix<double> Troncature(Block<double>* B,int rank, double epsilon, bool use_perm){
 		this->Tri(); 
@@ -251,7 +211,7 @@ class MyMatrix2 : public VirtualGenerator<double> {
 			LowRankMatrix<double> t (*B,Tk, *make_shared<sympartialACA<double>>() ,0,0,rank, epsilon,use_perm);
 			T = t;	}
 		return T;}
-		
+*/		
 	
 
 };
@@ -305,7 +265,7 @@ class MyMatrix : public VirtualGenerator<double> {
 
 /*
 
-void Hmult(Block<double>* L , Block<double>* Lk, SumExpression S,int rank, double epsilon, bool use_perm) {
+void Hmult(Block<double>* L, Block<double>* Lk , SumExpression S,int rank, double epsilon, bool use_perm) {
 	// Si Lt n'est pas un feuille (comment on vérifie BIEN ca?) on construit ses fils et on rappel Hmult avec la sumexpr restreint au fils
 	//Récursion
 	//cout<< Lk->get_target_cluster().get_offset()<<','<< Lk->get_target_cluster().get_size()<< endl;
@@ -320,7 +280,7 @@ void Hmult(Block<double>* L , Block<double>* Lk, SumExpression S,int rank, doubl
 			cout<< "1"<< endl;
 			int repere = 0; 
 			for( int k =0 ; k< Lk->get_target_cluster().get_nb_sons() ; ++k ){ 
-				for (int l =0; l< Lk->get_source_cluster().get_nb_sons(); ++l){
+				for (int l =0; l< L->get_source_cluster().get_nb_sons(); ++l){
 					Lk->build_son(Lk->get_target_cluster().get_son(k),Lk->get_source_cluster().get_son(l));
 					SumExpression Skl = S.Restrict(Lk->get_target_cluster().get_son(k),Lk->get_source_cluster().get_son(l));
 					Hmult(L,&Lk->get_son(repere),Skl, rank, epsilon , use_perm);  repere +=1;}}
@@ -335,7 +295,7 @@ void Hmult(Block<double>* L , Block<double>* Lk, SumExpression S,int rank, doubl
 				cout<< "2 ok" << endl;} 
 		else{ cout<< "3"<< endl;
 			int repere =0;
-			for (int l =0; l< Lk->get_source_cluster().get_nb_sons(); ++l){
+			for (int l =0; l< L->get_source_cluster().get_nb_sons(); ++l){
 					Lk->build_son(Lk->get_target_cluster(),Lk->get_source_cluster().get_son(l));
 					SumExpression Skl = S.Restrict(Lk->get_target_cluster(),Lk->get_source_cluster().get_son(l));
 					Hmult(L,&Lk->get_son(repere),Skl,rank, epsilon, use_perm);  repere +=1;}
@@ -367,71 +327,8 @@ void Hmult(Block<double>* L , Block<double>* Lk, SumExpression S,int rank, doubl
 		}
 		cout<< "?!"<< endl;
 	}
+
 */
-
-void Hmult(Matrix<double> L , Block<double>* Lk ,SumExpression S,int rank, double epsilon, bool use_perm) {
-	// Si Lt n'est pas un feuille (comment on vérifie BIEN ca?) on construit ses fils et on rappel Hmult avec la sumexpr restreint au fils
-	//Récursion
-	
-	if( !((Lk->get_target_cluster().get_nb_sons() == 0) and (Lk->get_source_cluster().get_nb_sons() == 0)) ){
-		//On est obligé de différencier les trois cas ...
-		if ( (Lk->get_target_cluster().get_nb_sons() > 0 ) and ( Lk->get_source_cluster().get_nb_sons() > 0) ){
-			int repere = 0; 
-			for( int k =0 ; k< Lk->get_target_cluster().get_nb_sons() ; ++k ){ 
-				for (int l =0; l< Lk->get_source_cluster().get_nb_sons(); ++l){
-					Lk->build_son(Lk->get_target_cluster().get_son(k),Lk->get_source_cluster().get_son(l));
-					SumExpression Skl = S.Restrict(Lk->get_target_cluster().get_son(k),Lk->get_source_cluster().get_son(l));
-					Hmult(L,&Lk->get_son(repere),Skl, rank, epsilon , use_perm);  repere +=1;}}
-					}
-		else if ( (Lk->get_target_cluster().get_nb_sons() > 0 )){
-			int repere =0;
-		for( int k =0 ; k< Lk->get_target_cluster().get_nb_sons() ; ++k ){ 
-				Lk->build_son(Lk->get_target_cluster().get_son(k),Lk->get_source_cluster());
-				SumExpression Skl = S.Restrict(Lk->get_target_cluster().get_son(k),Lk->get_source_cluster());
-				Hmult(L,&Lk->get_son(repere),Skl,rank,epsilon , use_perm);  repere +=1;}
-				} 
-		else{ 
-			int repere =0;
-			for (int l =0; l< Lk->get_source_cluster().get_nb_sons(); ++l){
-					Lk->build_son(Lk->get_target_cluster(),Lk->get_source_cluster().get_son(l));
-					SumExpression Skl = S.Restrict(Lk->get_target_cluster(),Lk->get_source_cluster().get_son(l));
-					Hmult(L,&Lk->get_son(repere),Skl,rank, epsilon, use_perm);  repere +=1;}
-					}
-		}
-	else{
-		//Normalement on est sur un feuille du coup on va devoir passer le *block_data en !nullptr 
-		//Premier cas feuille non admissible -> on fait Evaluate sur la sumexpr et on fait pointer le dense block data dessus
-		if ( !(Lk->IsAdmissible()) )  { 
-		// Le probleme est ici a cause du delete ~ de matrix
-		// Ca me dit "Memory error detected in malloc from /lib64/lib.so.6: null pointer or unaligned memory acces"
-			auto Val = S.Evaluate(Lk->get_target_cluster().get_size(),Lk->get_source_cluster().get_size());
-			MyMatrix2 val (3, Val.nb_rows(),Val.nb_cols(), Val);
-			
-			//C'est lui qui bloque, il veut bien le faire une fois mais pas deux
-			Lk->compute_dense_block(val, use_perm);
-			//int oft = Lk->get_target_cluster().get_offset(); int ofs = Lk->get_source_cluster().get_offset();
-			//int szt = Lk->get_target_cluster().get_size() ; int szs = Lk->get_source_cluster().get_size();
-			//for (int i =0 ; i < szt ; ++i){
-				//for (int j =0; j< szs ; ++j){
-					//L(i+oft, j+ofs) = Val(i,j); } }
-}
-		// Deuxieme cas on est admissible du coup normalement on a que Sh=[] ( on va quand même faire un tri)
-		// On fait pointer le bloc data sur la troncature
-		else { 
-			LowRankMatrix<double> T = S.Troncature(Lk, rank , epsilon , use_perm) ; 
-			//Matrix<double> Val = T.Get_U()*T.Get_V();
-			//int oft = Lk->get_target_cluster().get_offset(); int ofs = Lk->get_source_cluster().get_offset();
-			//int szt = Lk->get_target_cluster().get_size() ; int szs = Lk->get_source_cluster().get_size();
-			//for (int i =0 ; i < szt ; ++i){
-				//for (int j =0; j< szs ; ++j){
-					//L(i+oft, j+ofs) = Val(i,j); } }
-			MyMatrix2 gen (3, T.nb_rows(), T.nb_cols(), T.Get_U() * T.Get_V() );
-			Lk->compute_low_rank_block(rank,epsilon,gen,*make_shared<sympartialACA<double>>() ,0,0, use_perm );
-
-			}
-		}
-	}
-
 
 // Il nous faut une fonction pour calculer la norm de frob d'un bloc
 /*
@@ -514,7 +411,9 @@ int main(int argc, char *argv[]) {
      cout<< endl;
      //--------------------> Ok
      //////////////////////
-     
+    vector<Block<double>> vv;
+    
+    /* 
      
      /////////////////////////
     cout<< " test sumexpr"<< endl;
@@ -523,9 +422,7 @@ int main(int argc, char *argv[]) {
     cout<< S.get_sr().size() << ',' << S.get_off().size()<< ',' << S.get_sh().size()<<endl;
     //-----------------
     cout<<"test Tri:"<< endl<<endl;
-    // Je conprend pas pq mon test marchait avec lr[|1] et lr[2] mlais depuis que j'ai changer le cmake c'est plus les mêmes tailles et donc ca marche plus
-    vector<Block<double>*> v; v.push_back(L);v.push_back(L);v.push_back(LowR[2]);v.push_back(LowR[2]);
-    //cout << LowR[1]->get_target_cluster().get_size() << ',' << LowR[1]->get_source_cluster().get_size() << ',' << LowR[2]->get_target_cluster().get_size() <<','<< LowR[2]->get_source_cluster().get_size() << endl;
+    vector<Block<double>*> v; v.push_back(L);v.push_back(L);v.push_back(LowR[1]);v.push_back(LowR[2]);
     vector<Matrix<double>> lr; vector<int> ii;
     SumExpression Stri(lr,ii,v);
     cout<< Stri.get_sr().size()<< ','<< Stri.get_off().size()<<','<< Stri.get_sh().size()<< endl;
@@ -559,17 +456,11 @@ int main(int argc, char *argv[]) {
 	int rmax = 100;
 	cout<< "test Hmult" << endl;
 	Block<double> HK ( &*make_shared<Mycondition> (), L->get_target_cluster(), L->get_source_cluster() );
-	Matrix <double> test ( L->get_target_cluster().get_size(), L->get_source_cluster().get_size());
-	Hmult(test,&HK,S, rmax, epsilon , true);
-	Matrix<double> a  ( L->get_target_cluster().get_size(), L->get_source_cluster().get_size());
-	for (int k =0; k < L->get_target_cluster().get_size(); ++k){
-		for (int l=0; l< L->get_source_cluster().get_size(); ++l){
-			a(k,l) = A.get_coef(k,l);} }
-			
-	Matrix<double> AA = a*a;
-	cout<< normFrob(test-AA)/normFrob(AA) ; 
+	Hmult(&HK,&HK,S, rmax, epsilon , true);
+	//Matrix<double> AA = A*A;
+	//cout<< Frobenius_absolute_error(HK, AA) << endl ; 
 	
-
+*/
 	
 	
 

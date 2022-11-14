@@ -88,6 +88,11 @@ class LowRankMatrix : public VirtualBlockData<T> {
     std::vector<T> operator*(const std::vector<T> &a) const {
         return this->U * (this->V * a);
     }
+  // je rajoute lrmayt+lrmat
+    LowRankMatrix<double> operator + (LowRankMatrix<double> B){
+	Matrix<double> u1 = this->get_U();Matrix<double> v1 = this->get_V();
+	Matrix<double> u2 = this->get_U(); Matrix<double> v2 = get_V();
+	LowRankMatrix<double> res ( u1*v1,u2*v2
     void mvprod(const T *const in, T *const out) const {
         if (rank == 0) {
             std::fill(out, out + U.nb_cols(), 0);
