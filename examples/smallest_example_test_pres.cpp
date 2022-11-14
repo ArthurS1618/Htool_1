@@ -1,7 +1,11 @@
 #include <htool/htool.hpp>
-
+#include <time.h>
+#include <iostream>
+#include <fstream>
 using namespace std;
 using namespace htool;
+
+
 
 class MyMatrix : public VirtualGenerator<double> {
     const vector<double> &p1;
@@ -12,11 +16,27 @@ class MyMatrix : public VirtualGenerator<double> {
     // Constructor
     MyMatrix(int space_dim0, int nr, int nc, const vector<double> &p10, const vector<double> &p20) : VirtualGenerator(nr, nc), p1(p10), p2(p20), space_dim(space_dim0) {}
 
-    // Virtual function to overload
+    // // Virtual function to overload
     double get_coef(const int &k, const int &j) const {
         return (1.) / (4 * M_PI * std::sqrt(1e-5 + std::inner_product(p1.begin() + space_dim * k, p1.begin() + space_dim * k + space_dim, p2.begin() + space_dim * j, double(0), std::plus<double>(), [](double u, double v) { return (u - v) * (u - v); })));
     }
-
+  // vector<int> size(){ vector<int> a ; a .push_back(p1.size());a.push_back(p2.size());return a;}
+  
+  // double get_coef(const int &i, const int j) const{
+  //   int a=nr; int n= sqrt(a);
+  //   if(i==j){return(2.);}
+  //   else if (j == i+ n){return (-1.0);}
+  //   else if( i== j+n){ return(-1.0);}
+  //   else if(j == nr-n+i){return(-1.0);}
+  //   else if(i== nr-n+j){return(-1.0);}
+  //   else if (abs(i-j)==1){
+  //     if (j%n ==1 ){ return 0.0;}
+  //     else if(i%n==1){return 0.0;}
+  //     else{ return -1.0;}}
+  //   else{return 0.0;}
+  // }
+    
+      
     // Virtual function to overload
     void copy_submatrix(int M, int N, const int *const rows, const int *const cols, double *ptr) const override {
         for (int j = 0; j < M; j++) {
@@ -42,10 +62,10 @@ class MyMatrix : public VirtualGenerator<double> {
         double norm = 0;
         for (int j = 0; j < nr; j++) {
             for (int k = 0; k < nc; k++) {
-                norm += this->get_coef(j, k);
+                norm += this->get_coef(j, k)*this->get_coef(j, k);
             }
         }
-        return norm;
+        return sqrt(norm);
     }
 
 
@@ -180,14 +200,19 @@ class MyMatrix : public VirtualGenerator<double> {
     }
 
     std::string outputpath = argv[1];
-
+    vector<double> T;
+    vector<double> nvect;
+    vector<double> tvect;
+    for(int k =10; k <40; ++k){
     // Htool parameters
-    double epsilon = 0.001;
-    double eta     = 100;
+    int n = 5*k;
+    double epsilon = 0.000001;
+    double eta     = 1;
 
     // n² points on a regular grid in a square
-    int n    = std::sqrt(4761);
+    //int n    = std::sqrt(4761);
     int size = n * n;
+    cout<<size<< endl;
 
     // p1: points in a square in the plane z=z1
     double z = 1;
@@ -200,35 +225,74 @@ class MyMatrix : public VirtualGenerator<double> {
         }
     }
 
+    // Matrix<double> A(size,size);
+    // A(0,0)=2.0;A(size-1,size-1)=2.0;
+    // for ( int k =1; k< size-1 ; ++k){
+    //   A(k,k)= 2.0; A(k,k-1)=-1.0;A(k,k+1);}
+
     // Hmatrix
     MyMatrix A(3, size, size, p, p);
     std::vector<double> x(size, 1), result(size, 0);
     std::shared_ptr<Cluster<PCA<SplittingTypes::RegularSplitting>>> t = make_shared<Cluster<PCA<SplittingTypes::RegularSplitting>>>(3);
+    //clock_t start = clock();
     t->build(size, p.data(), 2);
     HMatrix<double> HA(t, t, epsilon, eta, 'S', 'U');
     HA.build(A, p.data());
+    //clock_t end = clock();
+    // double elapsed = double(end - start)/CLOCKS_PER_SEC;
+    double er = Frobenius_absolute_error(HA, A) / A.norm();
+    T.push_back(er);
+    clock_t start = clock();
     result = HA * x;
+    clock_t end = clock();
+    double elapsed = double(end - start)/CLOCKS_PER_SEC;
+    tvect.push_back(elapsed);
+    nvect.push_back(norm2(A * x - result) / norm2(A * x));
+    
+    // cout<<size<<endl;
+    // cout<<elapsed<< endl;
+    }
+    // // Output
+    // HA.print_infos();
+    // HA.save_plot("/work/sauniear/Documents/Code_htool/htool-main/build/examples/mat_art_plot");
+    // HA.get_target_cluster()->save_geometry(p.data(), outputpath + "/smallest_example_cluster", {1, 2, 3});
+    // std::cout << outputpath + "/smallest_example_plot" << std::endl;
+    // std::cout << Frobenius_absolute_error(HA, A) / A.norm() << std::endl;
+    // std::cout << norm2(A * x - result) / norm2(A * x) << std::endl;
+    //}
+    //cout<< T.size()<< endl;
 
-    // Output
-    HA.print_infos();
-    HA.save_plot(outputpath + "/smallest_example_plot");
-    HA.get_target_cluster()->save_geometry(p.data(), outputpath + "/smallest_example_cluster", {1, 2, 3});
-    std::cout << outputpath + "/smallest_example_plot" << std::endl;
-    std::cout << Frobenius_absolute_error(HA, A) / A.norm() << std::endl;
-    std::cout << norm2(A * x - result) / norm2(A * x) << std::endl;
+    string Myfile("/work/sauniear/Documents/er_assemblage.txt");
+    ofstream flux;
+    flux.open(Myfile.c_str());
+    
+    for (int k =0; k < T.size(); ++k){
+      flux << T[k]<< endl; }
 
+    string Myfile1("/work/sauniear/Documents/er_vect.txt");
+    ofstream flux1;
+    flux1.open(Myfile1.c_str());
+    
+    for (int k =0; k < T.size(); ++k){
+      flux1 << nvect[k]<< endl; }
 
+    string Myfile2("/work/sauniear/Documents/tps_vect.txt");
+    ofstream flux2;
+    flux2.open(Myfile2.c_str());
+    
+    for (int k =0; k < T.size(); ++k){
+      flux2 << tvect[k]<< endl; }
     // On rajoute nos test.
 
 
     // On veut modifier les blocs de L =HK
 
-    // On copie L ( j'arrive pas a l'initialiser a 0
-    HMatrix<double> Res(t, t, epsilon, eta, 'S', 'U');
-    Res.build(A, p.data());
-    vector<Block<double>*> Data = HA.get_ComputedBlock();
-    vector<Block<double>*> DataRes = Res.get_ComputedBlock();
-    // On va classer les low rank et pas low rank
+    // // On copie L ( j'arrive pas a l'initialiser a 0
+    // HMatrix<double> Res(t, t, epsilon, eta, 'S', 'U');
+    // Res.build(A, p.data());
+    // vector<Block<double>*> Data = HA.get_ComputedBlock();
+    // vector<Block<double>*> DataRes = Res.get_ComputedBlock();
+    // // On va classer les low rank et pas low rank
 
 
 //     vector<Block<complex<double>>> ll,fl,llR,flR;
@@ -239,7 +303,7 @@ class MyMatrix : public VirtualGenerator<double> {
 //       if( 
 // fonction restrict
 
-
-
+    // cout<< A.get_coef(3,2)<<','<<A.get_coef(3,3)<<','<<A.get_coef(3,4)<<endl;
+    // std::cout << Frobenius_absolute_error(HA, A) / A.norm() << std::endl;
     MPI_Finalize();
 }

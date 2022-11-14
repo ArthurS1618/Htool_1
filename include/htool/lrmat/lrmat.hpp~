@@ -60,12 +60,9 @@ class LowRankMatrix : public VirtualBlockData<T> {
 
 
     
-
-    }
-	//JE rajoute ca
-  LowRankMatrix(const Matrix<T>& U0, const Matrix<T>& V0): U(U0), V(V0) {}
-
-  ;
+  	//JE rajoute ca
+	//LowRankMatrix(Matrix<T> U0,Matrix<T> V0, int nr0, int nc0,double epsilon0 = 0.0001) :U(U0),V(V0), nr(nr0), nc(nc0), epsilon(epsilon0), rank(U0.nb_cols()) {}
+    };
 
     // Getters
     int nb_rows() const { return this->nr; }

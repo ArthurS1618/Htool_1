@@ -36,6 +36,8 @@ class Block {
     // Before computation of blocks, first guess
     std::shared_ptr<std::vector<Block *>> tasks;
     std::shared_ptr<std::vector<Block *>> local_tasks;
+  //je rajoute ca vaoir toute les feuilles pour la norme et tout
+  std::vector<Block<T>*>* feuilles;
 
     // Data associated to the block when computed, nullptr otherwise
     std::unique_ptr<VirtualBlockData<T>> block_data;
@@ -289,7 +291,16 @@ class Block {
     }
 
     void build_son(const VirtualCluster &t, const VirtualCluster &s) {
-        sons.push_back(std::unique_ptr<Block>(new Block(this->admissibility_condition, t, s, this->root, this->tasks, local_tasks)));
+        //cout<<'+'<<endl;
+        //std::unique_ptr<Block> pt0= new Block(this->admissibility_condition, t, s, this->root, this->tasks, this->local_tasks);
+        //std::cout<< "-----------"<< std::endl;
+        //std::cout<< this->nb_sons()<< std::endl;
+        //sons.push_back(std::unique_ptr<Block>(new Block(this->admissibility_condition, t, s, this->root, this->tasks,local_tasks)));
+        sons.push_back(std::unique_ptr<Block>(new Block(this->admissibility_condition, t, s)));
+        //sons.emplace(std::move(std::unique_ptr<Block>(new Block(this->admissibility_condition, t, s, this->root, this->tasks,local_tasks))));
+
+        //std::cout<< this->nb_sons()<< std::endl;
+        //this->sons.push_back(pt0);
     }
     void clear_sons() { sons.clear(); }
 
@@ -303,6 +314,7 @@ class Block {
     std::size_t get_size() const { return std::size_t(this->t.get_size()) * std::size_t(this->s.get_size()); }
     const Block &get_son(int j) const { return *(sons[j]); }
     Block &get_son(int j) { return *(sons[j]); }
+    //std::vector<Block*> Get_Son(){std::vector<Block*> ss; for(int k =0; k< this->nb_sons();++k){ss.push_back(this->get_son(k));return ss;}
 
     const std::vector<Block *> &get_tasks() const {
         return *tasks;
@@ -315,6 +327,13 @@ class Block {
     int get_mintargetdepth() const { return mintargetdepth; }
     int get_minsourcedepth() const { return minsourcedepth; }
     int get_maxblocksize() const { return maxblocksize; }
+    //je rajoute ca pour avoir les sons
+
+    //std::vector<std::unique_ptr<Block>> get_Son(){return this->sons;}
+//je rajoute un accesseur en écritue pour tasks
+    std::shared_ptr<Block<double>*> Get_Tasks(){return this->tasks;}
+
+
     int get_rank_of() const {
         if (dynamic_cast<DenseBlockData<T> *>(block_data.get()) != nullptr && dynamic_cast<LowRankMatrix<T> *>(block_data.get()) == nullptr) {
             return -1;
@@ -332,6 +351,8 @@ class Block {
         return dynamic_cast<LowRankMatrix<T> *>(block_data.get());
         ;
     }
+  //je rajoute ca
+  std::vector<Block<double>*>* get_feuilles(){return feuilles;}
 
     bool IsAdmissible() const {
         return admissible;
@@ -373,11 +394,6 @@ class Block {
             return t.get_offset() < block.get_target_cluster().get_offset();
         }
     }
-
-  // Je rajoute ca
-  void prd(const &block,vector<double> x , vector<double> y){
-
-  }
 };
 
 } // namespace htool

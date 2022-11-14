@@ -329,8 +329,6 @@ class Block {
     int get_maxblocksize() const { return maxblocksize; }
     //je rajoute ca pour avoir les sons
     //std::vector<std::unique_ptr<Block>> get_Son(){return this->sons;}
-//je rajoute un accesseur en écritue pour tasks
-    std::shared_ptr<Block<double>*> Get_Tasks(){return this->tasks;}
 
 
     int get_rank_of() const {
